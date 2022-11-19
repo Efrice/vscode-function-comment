@@ -1,30 +1,13 @@
-import { test, expect } from "vitest"
+import { test } from "vitest"
 import { getFunctionNode } from "../src/main"
 
 let code = `
-(a, b) => {
-  return a > b
+function sum(a: boolean | string | T, b: boolean | string | T): boolean | string | T {
+  return a + b
 }
 `
-test.only("is FunctionDeclaration ", () => {
-  const fn = getFunctionNode(code, 10, "js")
-})
 
-test("is ArrowFunctionExpression ", () => {
-  // const fn = getFunctionNode(code, 0)
-  // expect(fn).toEqual({
-  //   params: [
-  //     {
-  //       name: "a",
-  //       type: "",
-  //     },
-  //     {
-  //       name: "b",
-  //       type: "",
-  //     },
-  //   ],
-  //   return: true,
-  // })
+test("is FunctionDeclaration ", () => {
+  const fn = getFunctionNode(code, 2, "js")
+  console.log(fn)
 })
-
-test("compile vue", () => {})

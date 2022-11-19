@@ -6,6 +6,7 @@ import {
   FunctionExpression,
   ArrowFunctionExpression,
   isBlockStatement,
+  isNoop,
 } from "@babel/types"
 import * as complierSfc from "@vue/compiler-sfc"
 
@@ -18,6 +19,7 @@ interface FunctionNode {
   startLine: number
   params: ParamNode[]
   return: boolean
+  returnType?: string
 }
 
 function isCursorFunction(line: number, start: number, end: number) {
@@ -35,15 +37,21 @@ export function resolveComment(functionNode: FunctionNode) {
   if (!functionNode) {
     return
   }
-  const { params, return: hasReturn } = functionNode
+  const { params, return: hasReturn, returnType } = functionNode
   let paramsStr = "",
     returnStr = ""
   if (params?.length > 0) {
     params.forEach((ele, index) => {
-      paramsStr += ` * @param ${ele.name} $${index + 2} \n`
+      if (ele.type) {
+        paramsStr += ` * @param ${ele.name} {${ele.type}} $${index + 2} \n`
+      } else {
+        paramsStr += ` * @param ${ele.name} $${index + 2} \n`
+      }
     })
   }
-  if (hasReturn) {
+  if (hasReturn && returnType) {
+    returnStr = ` * @return {${returnType}} $${params?.length + 2}`
+  } else {
     returnStr = ` * @return $${params?.length + 2}`
   }
 
@@ -62,6 +70,9 @@ function generateParams(
     }
     if (item.type === "Identifier") {
       paramNode.name = item.name
+      if (item.typeAnnotation && !isNoop(item.typeAnnotation)) {
+        paramNode.type = resolveType(item.typeAnnotation.typeAnnotation)
+      }
     } else if (
       item.type === "RestElement" &&
       item.argument.type === "Identifier"
@@ -70,6 +81,20 @@ function generateParams(
     }
     return paramNode
   })
+}
+function resolveType(target: any) {
+  if (target.type === "TSTypeReference") {
+    return target.typeName.name
+  } else if (target.type === "TSUnionType") {
+    return target.types.map((item: any) => resolveType(item)).join(" | ")
+  } else {
+    const typeAnnotationMap: Record<string, string> = {
+      TSBooleanKeyword: "boolean",
+      TSNumberKeyword: "number",
+      TSStringKeyword: "string",
+    }
+    return typeAnnotationMap[target.type]
+  }
 }
 function hasReturn(
   path: NodePath<
@@ -82,6 +107,15 @@ function hasReturn(
         return true
       }
     })
+  }
+}
+function resolveReturnType(
+  path: NodePath<
+    FunctionDeclaration | FunctionExpression | ArrowFunctionExpression
+  >
+) {
+  if (path.node.returnType && !isNoop(path.node.returnType)) {
+    return resolveType(path.node.returnType.typeAnnotation)
   }
 }
 
@@ -128,6 +162,7 @@ export function getFunctionNode(
             : path.node.loc!.start.line,
         params: generateParams(path),
         return: hasReturn(path),
+        returnType: resolveReturnType(path),
       }
     }
   }
