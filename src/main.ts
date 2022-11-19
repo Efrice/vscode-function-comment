@@ -8,7 +8,7 @@ import {
   isBlockStatement,
   isNoop,
 } from "@babel/types"
-import * as complierSfc from "@vue/compiler-sfc"
+import { parse as complierSfc } from "@vue/compiler-sfc"
 
 interface ParamNode {
   name: string
@@ -96,7 +96,7 @@ export function getFunctionNode(
     offset = 0,
     functionPos = 0
   if (languageType === "vue") {
-    const { descriptor } = complierSfc.parse(code)
+    const { descriptor } = complierSfc(code)
     if (descriptor.script) {
       ast = parse(descriptor.script.content)
       offset = descriptor.script!.loc.start.line - 1
@@ -113,11 +113,12 @@ export function getFunctionNode(
     FunctionExpression: handleFunction,
     FunctionDeclaration: handleFunction,
     ArrowFunctionExpression: handleFunction,
+    ObjectMethod: handleFunction,
   })
 
   function handleFunction(
     path: NodePath<
-      FunctionDeclaration | FunctionExpression | ArrowFunctionExpression
+      FunctionDeclaration | FunctionExpression | ArrowFunctionExpression | any
     >
   ) {
     if (
