@@ -26,7 +26,7 @@ function isCursorFunction(line: number, start: number, end: number) {
 
 export function resolveComment(functionNode: FunctionNode) {
   const commentStart = `/**
- * 
+ * $1
  *
 `
   const commentEnd = `
@@ -39,12 +39,12 @@ export function resolveComment(functionNode: FunctionNode) {
   let paramsStr = "",
     returnStr = ""
   if (params?.length > 0) {
-    params.forEach((ele) => {
-      paramsStr += ` * @param ${ele.name} \n`
+    params.forEach((ele, index) => {
+      paramsStr += ` * @param ${ele.name} $${index + 2} \n`
     })
   }
   if (hasReturn) {
-    returnStr = ` * @return `
+    returnStr = ` * @return $${params?.length + 2}`
   }
 
   return commentStart + paramsStr + returnStr + commentEnd
@@ -92,13 +92,15 @@ export function getFunctionNode(
 ): FunctionNode | undefined {
   let functionNode,
     ast,
-    offset = 0
+    offset = 0,
+    functionPos = 0
   if (languageType === "vue") {
     const { descriptor } = complierSfc.parse(code)
-    offset = line - descriptor.script!.loc.start.line + 1
+    offset = descriptor.script!.loc.start.line - 1
+    functionPos = line - offset
     ast = parse(descriptor.script!.content)
   } else {
-    offset = line
+    functionPos = line
     ast = parse(code)
   }
   traverse(ast, {
@@ -114,7 +116,7 @@ export function getFunctionNode(
   ) {
     if (
       isCursorFunction(
-        offset,
+        functionPos,
         path.node.loc!.start.line,
         path.node.loc!.end.line
       )
