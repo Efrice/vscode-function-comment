@@ -7,6 +7,7 @@ import {
   ArrowFunctionExpression,
   isBlockStatement,
 } from "@babel/types"
+import * as complierSfc from "@vue/compiler-sfc"
 
 interface ParamNode {
   name: string
@@ -23,7 +24,7 @@ function isCursorFunction(line: number, start: number, end: number) {
   return line >= start && line <= end
 }
 
-export function resolveComment(functionNode: FunctionNode | null) {
+export function resolveComment(functionNode: FunctionNode) {
   const commentStart = `/**
  * 
  *
@@ -31,7 +32,7 @@ export function resolveComment(functionNode: FunctionNode | null) {
   const commentEnd = `
  */
 `
-  if (functionNode === null) {
+  if (!functionNode) {
     return
   }
   const { params, return: hasReturn } = functionNode
@@ -86,10 +87,20 @@ function hasReturn(
 
 export function getFunctionNode(
   code: string,
-  line: number
-): FunctionNode | null {
-  let functionNode = null
-  const ast = parse(code)
+  line: number,
+  languageType: string
+): FunctionNode | undefined {
+  let functionNode,
+    ast,
+    offset = 0
+  if (languageType === "vue") {
+    const { descriptor } = complierSfc.parse(code)
+    offset = line - descriptor.script!.loc.start.line + 1
+    ast = parse(descriptor.script!.content)
+  } else {
+    offset = line
+    ast = parse(code)
+  }
   traverse(ast, {
     FunctionExpression: handleFunction,
     FunctionDeclaration: handleFunction,
@@ -102,10 +113,17 @@ export function getFunctionNode(
     >
   ) {
     if (
-      isCursorFunction(line, path.node.loc!.start.line, path.node.loc!.end.line)
+      isCursorFunction(
+        offset,
+        path.node.loc!.start.line,
+        path.node.loc!.end.line
+      )
     ) {
       functionNode = {
-        startLine: path.node.loc!.start.line,
+        startLine:
+          languageType === "vue"
+            ? path.node.loc!.start.line + offset
+            : path.node.loc!.start.line,
         params: generateParams(path),
         return: hasReturn(path),
       }

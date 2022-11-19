@@ -6,12 +6,12 @@ let code = `
   return a > b
 }
 `
-test("is FunctionDeclaration ", () => {
-  const fn = getFunctionNode(code, 10)
+test.only("is FunctionDeclaration ", () => {
+  const fn = getFunctionNode(code, 10, "js")
 })
 
 test("is ArrowFunctionExpression ", () => {
-  const fn = getFunctionNode(code, 0)
+  // const fn = getFunctionNode(code, 0)
   // expect(fn).toEqual({
   //   params: [
   //     {
@@ -27,31 +27,4 @@ test("is ArrowFunctionExpression ", () => {
   // })
 })
 
-test.only("compile vue", () => {
-  const code = `
-  <template>
-	<div>
-
-	</div>
-</template>
-
-<script>
-import { defineComponent } from 'vue'
-
-export default defineComponent({
-	setup () {
-		function setName () {
-			return "name"
-		}
-
-		const name = "nihao"
-		return {}
-	}
-})
-</script>
-
-<style scoped>
-
-</style>
-  `
-})
+test("compile vue", () => {})
