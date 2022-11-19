@@ -25,39 +25,6 @@ interface FunctionNode {
 function isCursorFunction(line: number, start: number, end: number) {
   return line >= start && line <= end
 }
-
-export function resolveComment(functionNode: FunctionNode) {
-  const commentStart = `/**
- * $1
- *
-`
-  const commentEnd = `
- */
-`
-  if (!functionNode) {
-    return
-  }
-  const { params, return: hasReturn, returnType } = functionNode
-  let paramsStr = "",
-    returnStr = ""
-  if (params?.length > 0) {
-    params.forEach((ele, index) => {
-      if (ele.type) {
-        paramsStr += ` * @param ${ele.name} {${ele.type}} $${index + 2} \n`
-      } else {
-        paramsStr += ` * @param ${ele.name} $${index + 2} \n`
-      }
-    })
-  }
-  if (hasReturn && returnType) {
-    returnStr = ` * @return {${returnType}} $${params?.length + 2}`
-  } else {
-    returnStr = ` * @return $${params?.length + 2}`
-  }
-
-  return commentStart + paramsStr + returnStr + commentEnd
-}
-
 function generateParams(
   path: NodePath<
     FunctionDeclaration | FunctionExpression | ArrowFunctionExpression
@@ -130,9 +97,14 @@ export function getFunctionNode(
     functionPos = 0
   if (languageType === "vue") {
     const { descriptor } = complierSfc.parse(code)
-    offset = descriptor.script!.loc.start.line - 1
+    if (descriptor.script) {
+      ast = parse(descriptor.script.content)
+      offset = descriptor.script!.loc.start.line - 1
+    } else if (descriptor.scriptSetup) {
+      ast = parse(descriptor.scriptSetup.content)
+      offset = descriptor.scriptSetup!.loc.start.line - 1
+    }
     functionPos = line - offset
-    ast = parse(descriptor.script!.content)
   } else {
     functionPos = line
     ast = parse(code)
@@ -167,4 +139,35 @@ export function getFunctionNode(
     }
   }
   return functionNode
+}
+export function resolveComment(functionNode: FunctionNode) {
+  const commentStart = `/**
+ * $1
+ *
+`
+  const commentEnd = `
+ */
+`
+  if (!functionNode) {
+    return
+  }
+  const { params, return: hasReturn, returnType } = functionNode
+  let paramsStr = "",
+    returnStr = ""
+  if (params?.length > 0) {
+    params.forEach((ele, index) => {
+      if (ele.type) {
+        paramsStr += ` * @param ${ele.name} {${ele.type}} $${index + 2} \n`
+      } else {
+        paramsStr += ` * @param ${ele.name} $${index + 2} \n`
+      }
+    })
+  }
+  if (hasReturn && returnType) {
+    returnStr = ` * @return {${returnType}} $${params?.length + 2}`
+  } else {
+    returnStr = ` * @return $${params?.length + 2}`
+  }
+
+  return commentStart + paramsStr + returnStr + commentEnd
 }
