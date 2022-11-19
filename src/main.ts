@@ -6,7 +6,9 @@ import {
   FunctionExpression,
   ArrowFunctionExpression,
   isBlockStatement,
+  isNoop,
 } from "@babel/types"
+import * as complierSfc from "@vue/compiler-sfc"
 
 interface ParamNode {
   name: string
@@ -17,33 +19,40 @@ interface FunctionNode {
   startLine: number
   params: ParamNode[]
   return: boolean
+  returnType?: string
 }
 
 function isCursorFunction(line: number, start: number, end: number) {
   return line >= start && line <= end
 }
 
-export function resolveComment(functionNode: FunctionNode | null) {
+export function resolveComment(functionNode: FunctionNode) {
   const commentStart = `/**
- * 
+ * $1
  *
 `
   const commentEnd = `
  */
 `
-  if (functionNode === null) {
+  if (!functionNode) {
     return
   }
-  const { params, return: hasReturn } = functionNode
+  const { params, return: hasReturn, returnType } = functionNode
   let paramsStr = "",
     returnStr = ""
   if (params?.length > 0) {
-    params.forEach((ele) => {
-      paramsStr += ` * @param ${ele.name} \n`
+    params.forEach((ele, index) => {
+      if (ele.type) {
+        paramsStr += ` * @param ${ele.name} {${ele.type}} $${index + 2} \n`
+      } else {
+        paramsStr += ` * @param ${ele.name} $${index + 2} \n`
+      }
     })
   }
-  if (hasReturn) {
-    returnStr = ` * @return `
+  if (hasReturn && returnType) {
+    returnStr = ` * @return {${returnType}} $${params?.length + 2}`
+  } else {
+    returnStr = ` * @return $${params?.length + 2}`
   }
 
   return commentStart + paramsStr + returnStr + commentEnd
@@ -61,6 +70,9 @@ function generateParams(
     }
     if (item.type === "Identifier") {
       paramNode.name = item.name
+      if (item.typeAnnotation && !isNoop(item.typeAnnotation)) {
+        paramNode.type = resolveType(item.typeAnnotation.typeAnnotation)
+      }
     } else if (
       item.type === "RestElement" &&
       item.argument.type === "Identifier"
@@ -69,6 +81,20 @@ function generateParams(
     }
     return paramNode
   })
+}
+function resolveType(target: any) {
+  if (target.type === "TSTypeReference") {
+    return target.typeName.name
+  } else if (target.type === "TSUnionType") {
+    return target.types.map((item: any) => resolveType(item)).join(" | ")
+  } else {
+    const typeAnnotationMap: Record<string, string> = {
+      TSBooleanKeyword: "boolean",
+      TSNumberKeyword: "number",
+      TSStringKeyword: "string",
+    }
+    return typeAnnotationMap[target.type]
+  }
 }
 function hasReturn(
   path: NodePath<
@@ -83,13 +109,34 @@ function hasReturn(
     })
   }
 }
+function resolveReturnType(
+  path: NodePath<
+    FunctionDeclaration | FunctionExpression | ArrowFunctionExpression
+  >
+) {
+  if (path.node.returnType && !isNoop(path.node.returnType)) {
+    return resolveType(path.node.returnType.typeAnnotation)
+  }
+}
 
 export function getFunctionNode(
   code: string,
-  line: number
-): FunctionNode | null {
-  let functionNode = null
-  const ast = parse(code)
+  line: number,
+  languageType: string
+): FunctionNode | undefined {
+  let functionNode,
+    ast,
+    offset = 0,
+    functionPos = 0
+  if (languageType === "vue") {
+    const { descriptor } = complierSfc.parse(code)
+    offset = descriptor.script!.loc.start.line - 1
+    functionPos = line - offset
+    ast = parse(descriptor.script!.content)
+  } else {
+    functionPos = line
+    ast = parse(code)
+  }
   traverse(ast, {
     FunctionExpression: handleFunction,
     FunctionDeclaration: handleFunction,
@@ -102,12 +149,20 @@ export function getFunctionNode(
     >
   ) {
     if (
-      isCursorFunction(line, path.node.loc!.start.line, path.node.loc!.end.line)
+      isCursorFunction(
+        functionPos,
+        path.node.loc!.start.line,
+        path.node.loc!.end.line
+      )
     ) {
       functionNode = {
-        startLine: path.node.loc!.start.line,
+        startLine:
+          languageType === "vue"
+            ? path.node.loc!.start.line + offset
+            : path.node.loc!.start.line,
         params: generateParams(path),
         return: hasReturn(path),
+        returnType: resolveReturnType(path),
       }
     }
   }

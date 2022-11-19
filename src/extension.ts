@@ -15,8 +15,12 @@ export function activate(context: vs.ExtensionContext) {
     }
 
     try {
-      const functionNode = getFunctionNode(editor.document.getText(), line + 1)
-      const comment = resolveComment(functionNode)
+      const functionNode = getFunctionNode(
+        editor.document.getText(),
+        line + 1,
+        languageType
+      )
+      const comment = functionNode && resolveComment(functionNode)
       if (comment && functionNode?.startLine) {
         editor.insertSnippet(
           new vs.SnippetString(comment),

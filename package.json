@@ -46,6 +46,7 @@
     "@babel/parser": "^7.20.3",
     "@babel/traverse": "^7.20.1",
     "@babel/types": "^7.20.2",
+    "@vue/compiler-sfc": "^3.2.45",
     "vitest": "^0.25.2"
   }
 }
