@@ -7,7 +7,7 @@ const BABEL_PARSER_OPTIONS: ParserOptions = {
   allowReturnOutsideFunction: true,
   startLine: 1,
   tokens: true,
-  plugins: ["typescript"],
+  plugins: ["typescript", "jsx"],
 }
 
 export function parse(code: string) {

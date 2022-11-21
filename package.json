@@ -1,23 +1,41 @@
 {
   "name": "function-comment",
-  "displayName": "function-comment",
-  "description": "",
+  "displayName": "Function Comment",
+  "description": "generate function comment anywhere",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.73.0"
   },
+  "icon": "images/icon.png",
   "categories": [
-    "Other"
+    "Other",
+    "Snippets",
+    "Programming Languages"
   ],
+  "author": "Efrice",
+  "publisher": "Efrice",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Efrice/function-comment"
+  },
   "activationEvents": [
-    "onCommand:function-comment.helloWorld"
+    "onCommand:function-comment.functionComment"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "function-comment.helloWorld",
-        "title": "Hello World"
+        "command": "function-comment.functionComment",
+        "category": "FunctionComment",
+        "title": "Function Comment"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "function-comment.functionComment",
+        "key": "ctrl+shift+/",
+        "mac": "cmd+shift+/"
       }
     ]
   },
