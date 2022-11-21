@@ -1,9 +1,3 @@
-# Change Log
+### 0.0.1
 
-All notable changes to the "function-comment" extension will be documented in this file.
-
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
-
-## [Unreleased]
-
-- Initial release
+- type `ctrl+shif+/` or `cmd+shift+/` to generate function comment anywhere

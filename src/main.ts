@@ -15,7 +15,7 @@ interface ParamNode {
   type: string
 }
 
-interface FunctionNode {
+export interface FunctionNode {
   startLine: number
   params: ParamNode[]
   return: boolean
@@ -23,7 +23,21 @@ interface FunctionNode {
 }
 
 function isCursorFunction(line: number, start: number, end: number) {
-  return line >= start && line <= end
+  return line >= start - 1 && line <= end
+}
+function resolveType(target: any) {
+  if (target.type === "TSTypeReference") {
+    return target.typeName.name
+  } else if (target.type === "TSUnionType") {
+    return target.types.map((item: any) => resolveType(item)).join(" | ")
+  } else {
+    const typeAnnotationMap: Record<string, string> = {
+      TSBooleanKeyword: "boolean",
+      TSNumberKeyword: "number",
+      TSStringKeyword: "string",
+    }
+    return typeAnnotationMap[target.type]
+  }
 }
 function generateParams(
   path: NodePath<
@@ -49,20 +63,6 @@ function generateParams(
     return paramNode
   })
 }
-function resolveType(target: any) {
-  if (target.type === "TSTypeReference") {
-    return target.typeName.name
-  } else if (target.type === "TSUnionType") {
-    return target.types.map((item: any) => resolveType(item)).join(" | ")
-  } else {
-    const typeAnnotationMap: Record<string, string> = {
-      TSBooleanKeyword: "boolean",
-      TSNumberKeyword: "number",
-      TSStringKeyword: "string",
-    }
-    return typeAnnotationMap[target.type]
-  }
-}
 function hasReturn(
   path: NodePath<
     FunctionDeclaration | FunctionExpression | ArrowFunctionExpression
@@ -76,13 +76,15 @@ function hasReturn(
     })
   }
 }
-function resolveReturnType(
+function returnType(
   path: NodePath<
     FunctionDeclaration | FunctionExpression | ArrowFunctionExpression
   >
 ) {
   if (path.node.returnType && !isNoop(path.node.returnType)) {
     return resolveType(path.node.returnType.typeAnnotation)
+  } else {
+    return ""
   }
 }
 
@@ -95,6 +97,7 @@ export function getFunctionNode(
     ast,
     offset = 0,
     functionPos = 0
+
   if (languageType === "vue") {
     const { descriptor } = complierSfc(code)
     if (descriptor.script) {
@@ -109,16 +112,16 @@ export function getFunctionNode(
     functionPos = line
     ast = parse(code)
   }
-  traverse(ast, {
-    FunctionExpression: handleFunction,
-    FunctionDeclaration: handleFunction,
-    ArrowFunctionExpression: handleFunction,
-    ObjectMethod: handleFunction,
-  })
 
+  const functionClass = [
+    "FunctionExpression",
+    "FunctionDeclaration",
+    "ArrowFunctionExpression",
+    "ObjectMethod",
+  ]
   function handleFunction(
     path: NodePath<
-      FunctionDeclaration | FunctionExpression | ArrowFunctionExpression | any
+      FunctionDeclaration | FunctionExpression | ArrowFunctionExpression
     >
   ) {
     if (
@@ -135,19 +138,29 @@ export function getFunctionNode(
             : path.node.loc!.start.line,
         params: generateParams(path),
         return: hasReturn(path),
-        returnType: resolveReturnType(path),
+        returnType: returnType(path),
       }
     }
   }
+  const functionClassHanle = functionClass.reduce(
+    (target: Record<string, Function>, val) => {
+      target[val] = handleFunction
+      return target
+    },
+    {}
+  )
+
+  traverse(ast, functionClassHanle)
+
   return functionNode
 }
+
 export function resolveComment(functionNode: FunctionNode) {
   const commentStart = `/**
  * $1
  *
 `
-  const commentEnd = `
- */
+  const commentEnd = ` */
 `
   if (!functionNode) {
     return
@@ -164,10 +177,12 @@ export function resolveComment(functionNode: FunctionNode) {
       }
     })
   }
-  if (hasReturn && returnType) {
-    returnStr = ` * @return {${returnType}} $${params?.length + 2}`
-  } else {
-    returnStr = ` * @return $${params?.length + 2}`
+  if (hasReturn) {
+    if (returnType) {
+      returnStr = ` * @return {${returnType}} $${params?.length + 2} \n`
+    } else {
+      returnStr = ` * @return $${params?.length + 2} \n`
+    }
   }
 
   return commentStart + paramsStr + returnStr + commentEnd

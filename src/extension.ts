@@ -2,7 +2,8 @@ import * as vs from "vscode"
 import { getFunctionNode, resolveComment } from "./main"
 
 export function activate(context: vs.ExtensionContext) {
-  vs.commands.registerCommand("function-comment.helloWorld", () => {
+  const commandId = "function-comment.functionComment"
+  const disposable = vs.commands.registerCommand(commandId, () => {
     const editor = vs.window.activeTextEditor
     if (!editor) {
       return
@@ -29,4 +30,6 @@ export function activate(context: vs.ExtensionContext) {
       }
     } catch (error) {}
   })
+
+  context.subscriptions.push(disposable)
 }
