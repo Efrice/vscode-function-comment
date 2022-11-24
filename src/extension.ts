@@ -1,5 +1,5 @@
 import * as vs from "vscode"
-import { getFunctionNode, resolveComment } from "./main"
+import { getComment } from "./index"
 
 export function activate(context: vs.ExtensionContext) {
   const commandId = "function-comment.functionComment"
@@ -9,23 +9,15 @@ export function activate(context: vs.ExtensionContext) {
       return
     }
     const { line } = editor.selection.active
-    const languageType = editor.document.languageId
-
-    if (!languageType) {
-      return
-    }
-
     try {
-      const functionNode = getFunctionNode(
+      const { comment, startLine } = getComment(
         editor.document.getText(),
-        line + 1,
-        languageType
+        line + 1
       )
-      const comment = functionNode && resolveComment(functionNode)
-      if (comment && functionNode?.startLine) {
+      if (comment && startLine) {
         editor.insertSnippet(
           new vs.SnippetString(comment),
-          new vs.Position(functionNode!.startLine - 1, 0)
+          new vs.Position(startLine, 0)
         )
       }
     } catch (error) {}
