@@ -1,111 +1,126 @@
-interface Line {
-  isFunction?: boolean
-  code: string
-  loc: {
-    startLine: number
-    endLine?: number
-  }
-}
-
 interface ParamNode {
   name: string
   type: string
 }
 
-export interface FunctionNode {
-  startLine: number
+interface FunctionNode {
   params: ParamNode[]
   returnType?: string
 }
 
-export function lines(code: string): Line[] {
-  return code.split("\n").map((val, index) => {
-    return {
-      code: val.trim(),
-      loc: {
-        startLine: index,
-      },
-    }
-  })
+interface FunctionMsg {
+  isNormalJSFunction: boolean
+  isArrowJSFunction: boolean
+  isNormalTSFunction: boolean
+  isArrowTSFunction: boolean
+  startLine: number
 }
 
-export function resolveFunctionEndLine(lines: Line[]) {
-  const braceStack: Line[] = [],
-    functionLineStack: Line[] = []
-  let isFunction = false
-
-  lines.forEach((item) => {
-    const { code } = item
-    if (code.includes("function ") || code.includes("=>")) {
-      isFunction = true
-      item.isFunction = true
-      functionLineStack.push(item)
-    }
-    if (isFunction && item.code.includes("{")) {
-      braceStack.push(item)
-    }
-    if (isFunction && item.code.includes("}")) {
-      braceStack.pop()
-      const currentFunction = functionLineStack.pop()
-      currentFunction!.loc.endLine = item.loc.startLine
-    }
-    if (functionLineStack.length === 0) {
-      isFunction = false
-    }
-  })
+interface Snippet {
+  comment: string
+  startLine: number
 }
 
-export function getTargetFunctionLines(lines: Line[], line: number): Line[] {
-  let targeFunctionLines: Line[] = [],
-    isTargetFunction = false
-  lines.forEach((item) => {
-    const { code, isFunction, loc } = item
-    if (
-      isFunction &&
-      line >= loc.startLine &&
-      loc.endLine &&
-      line <= loc.endLine
-    ) {
-      isTargetFunction = true
+function getLines(code: string): string[] {
+  return code.split("\n")
+}
+function isFunction(lines: string[], line: number): FunctionMsg {
+  const code = lines[line],
+    nextCode = lines[line + 1],
+    nextTwoCode = lines[line + 2],
+    functionMsg = {
+      isNormalJSFunction: false,
+      isArrowJSFunction: false,
+      isNormalTSFunction: false,
+      isArrowTSFunction: false,
+      startLine: line,
     }
-    if (isTargetFunction) {
-      targeFunctionLines.push(item)
+  if (code.includes("function ")) {
+    if (code.includes(":") || nextCode.includes(":")) {
+      functionMsg["isNormalTSFunction"] = true
+    } else {
+      functionMsg["isNormalJSFunction"] = true
     }
-    if (code.includes("{")) {
-      isTargetFunction = false
-    }
-  })
-  let functionIndexs: number[] = []
-  targeFunctionLines.forEach((item, index) => {
-    if (item.isFunction) {
-      functionIndexs.push(index)
-    }
-  })
-  if (functionIndexs.length === 1) {
-    return targeFunctionLines
-  } else {
-    return targeFunctionLines.slice(functionIndexs[functionIndexs.length - 1])
+    return functionMsg
   }
+  if (nextCode.includes("function ")) {
+    functionMsg["startLine"] = line + 1
+    if (nextCode.includes(":") || nextTwoCode.includes(":")) {
+      functionMsg["isNormalTSFunction"] = true
+    } else {
+      functionMsg["isNormalJSFunction"] = true
+    }
+    return functionMsg
+  }
+  if (code.includes("=>")) {
+    if (code.includes(":") || nextCode.includes(":")) {
+      functionMsg["isArrowTSFunction"] = true
+    } else {
+      functionMsg["isArrowJSFunction"] = true
+    }
+    return functionMsg
+  }
+  if (nextCode.includes("=>")) {
+    functionMsg["startLine"] = line + 1
+    if (nextCode.includes(":") || nextTwoCode.includes(":")) {
+      functionMsg["isArrowTSFunction"] = true
+    } else {
+      functionMsg["isArrowJSFunction"] = true
+    }
+    return functionMsg
+  }
+  return functionMsg
 }
 
-export function getFunctionNode(lines: Line[]): FunctionNode {
+function getFunctionCode(lines: string[], functionMsg: FunctionMsg): string {
+  let functionCode = ""
+
+  const {
+    isNormalJSFunction,
+    isArrowJSFunction,
+    isNormalTSFunction,
+    isArrowTSFunction,
+    startLine,
+  } = functionMsg
+  if (isNormalJSFunction || isNormalTSFunction) {
+    for (let i = startLine; i < lines.length; i++) {
+      const ele = lines[i]
+      if (ele.includes("{")) {
+        functionCode += ele
+        break
+      }
+      functionCode += ele
+    }
+  }
+  if (isArrowJSFunction || isArrowTSFunction) {
+    for (let i = startLine; i < lines.length; i++) {
+      const ele = lines[i]
+      if (ele.includes("=>")) {
+        functionCode += ele
+        break
+      }
+      functionCode += ele
+    }
+  }
+  return functionCode
+}
+
+function getFunctionNode(
+  lines: string[],
+  functionMsg: FunctionMsg
+): FunctionNode {
   const functionNode: FunctionNode = {
-    startLine: 0,
     params: [],
     returnType: "",
   }
   if (lines.length === 0) {
     return functionNode
   }
-  functionNode.startLine = lines[0].loc.startLine
-  let functionCode = ""
-  lines.forEach((item) => {
-    functionCode += item.code
-  })
+  const functionCode = getFunctionCode(lines, functionMsg)
   const args = functionCode.match(/\([^\(\)]+\)/)
   if (args !== null) {
     const functionParamsCode = args[0].substring(1, args[0].length - 1)
-    functionNode.params = resolveParams(functionParamsCode)
+    functionNode.params = resolveParams(functionParamsCode, functionMsg)
   }
   const returns = functionCode.match(/\):([\W\w]+)(=>)?\{?/)
   if (returns !== null) {
@@ -114,9 +129,15 @@ export function getFunctionNode(lines: Line[]): FunctionNode {
   return functionNode
 }
 
-function resolveParams(code: string): ParamNode[] {
-  const paramsNodes: ParamNode[] = []
-  if (!code.includes("=") && !code.includes(":")) {
+function resolveParams(code: string, functionMsg: FunctionMsg): ParamNode[] {
+  const paramsNodes: ParamNode[] = [],
+    {
+      isNormalJSFunction,
+      isArrowJSFunction,
+      isNormalTSFunction,
+      isArrowTSFunction,
+    } = functionMsg
+  if (isNormalJSFunction || isArrowJSFunction) {
     const params = code.split(",")
     params.forEach((item) => {
       paramsNodes.push({
@@ -124,8 +145,18 @@ function resolveParams(code: string): ParamNode[] {
         type: "",
       })
     })
-  } else {
-    const params = code.split(",")
+  }
+  if (isNormalTSFunction || isArrowTSFunction) {
+    const originParams = code.split(","),
+      params: string[] = []
+    for (let i = 0; i < originParams.length; i++) {
+      const ele = originParams[i]
+      if (ele.includes(":") || ele.includes("=")) {
+        params.push(ele)
+      } else {
+        params[params.length - 1] += "," + ele
+      }
+    }
     params.forEach((item) => {
       if (item.includes("=")) {
         const nameType = item.trim().split("=")
@@ -155,7 +186,7 @@ const typeMap: Record<string, Function> = {
   number: isNumber,
 }
 
-function resolveType(val: string) {
+function resolveType(val: string): string {
   for (const key in typeMap) {
     const fn = typeMap[key]
     if (fn(val)) {
@@ -165,14 +196,14 @@ function resolveType(val: string) {
   return "*"
 }
 
-function resolveReturnType(val: string) {
+function resolveReturnType(val: string): string {
   return val
-    .substring(2, val.length - 1)
+    .substring(2, val.includes("{") ? val.length - 2 : val.length - 3)
     .replace(/=>[\W\w]+/g, "")
     .trim()
 }
 
-function resolveComment(functionNode: FunctionNode) {
+function resolveComment(functionNode: FunctionNode): string {
   const commentStart = `/**
  * $1
  *
@@ -180,7 +211,7 @@ function resolveComment(functionNode: FunctionNode) {
   const commentEnd = ` */
 `
   if (!functionNode) {
-    return
+    return ""
   }
   const { params, returnType } = functionNode
   let paramsStr = "",
@@ -203,13 +234,32 @@ function resolveComment(functionNode: FunctionNode) {
   return commentStart + paramsStr + returnStr + commentEnd
 }
 
-export function getComment(code: string, line: number) {
-  const originLines = lines(code)
-  resolveFunctionEndLine(originLines)
-  const targetFunctionLines = getTargetFunctionLines(originLines, line)
-  const functionNode = getFunctionNode(targetFunctionLines)
+export function getComment(code: string, line: number): Snippet {
+  const lines = getLines(code),
+    functionMsg = isFunction(lines, line),
+    {
+      isNormalJSFunction,
+      isArrowJSFunction,
+      isNormalTSFunction,
+      isArrowTSFunction,
+      startLine,
+    } = functionMsg
+  if (
+    !(
+      isNormalJSFunction ||
+      isArrowJSFunction ||
+      isNormalTSFunction ||
+      isArrowTSFunction
+    )
+  ) {
+    return {
+      comment: "",
+      startLine: 0,
+    }
+  }
+  const functionNode = getFunctionNode(lines, functionMsg)
   return {
-    comment: functionNode && resolveComment(functionNode),
-    startLine: functionNode?.startLine,
+    comment: (functionNode && resolveComment(functionNode)) || "",
+    startLine: startLine,
   }
 }
