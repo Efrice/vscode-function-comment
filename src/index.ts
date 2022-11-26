@@ -25,9 +25,9 @@ function getLines(code: string): string[] {
   return code.split("\n")
 }
 function isFunction(lines: string[], line: number): FunctionMsg {
-  const code = lines[line],
-    nextCode = lines[line + 1],
-    nextTwoCode = lines[line + 2],
+  let code = lines[line],
+    nextCode = lines[line + 1]
+  const nextTwoCode = lines[line + 2],
     functionMsg = {
       isNormalJSFunction: false,
       isArrowJSFunction: false,
@@ -53,20 +53,33 @@ function isFunction(lines: string[], line: number): FunctionMsg {
     return functionMsg
   }
   if (code.includes("=>")) {
-    if (code.includes(":") || nextCode.includes(":")) {
+    let startLine = line,
+      paramsStr = ""
+    while (!code.includes("(") && startLine >= 0) {
+      code = lines[--startLine]
+      paramsStr += code
+    }
+    if (paramsStr.includes(":") || nextCode.includes(":")) {
       functionMsg["isArrowTSFunction"] = true
     } else {
       functionMsg["isArrowJSFunction"] = true
     }
+    functionMsg["startLine"] = startLine
     return functionMsg
   }
   if (nextCode.includes("=>")) {
-    functionMsg["startLine"] = line + 1
-    if (nextCode.includes(":") || nextTwoCode.includes(":")) {
+    let startLine = line + 1,
+      paramsStr = ""
+    while (!nextCode.includes("(") && startLine >= 0) {
+      nextCode = lines[--startLine]
+      paramsStr += nextCode
+    }
+    if (paramsStr.includes(":") || nextTwoCode.includes(":")) {
       functionMsg["isArrowTSFunction"] = true
     } else {
       functionMsg["isArrowJSFunction"] = true
     }
+    functionMsg["startLine"] = startLine
     return functionMsg
   }
   return functionMsg
@@ -200,6 +213,7 @@ function resolveReturnType(val: string): string {
   return val
     .substring(2, val.includes("{") ? val.length - 2 : val.length - 3)
     .replace(/=>[\W\w]+/g, "")
+    .replace(/[\s]+/g, "")
     .trim()
 }
 
