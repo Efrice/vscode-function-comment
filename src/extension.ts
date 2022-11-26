@@ -9,12 +9,10 @@ export function activate(context: vs.ExtensionContext) {
       return
     }
     const { line } = editor.selection.active
+
     try {
-      const { comment, startLine } = getComment(
-        editor.document.getText(),
-        line + 1
-      )
-      if (comment && startLine) {
+      const { comment, startLine } = getComment(editor.document.getText(), line)
+      if (comment) {
         editor.insertSnippet(
           new vs.SnippetString(comment),
           new vs.Position(startLine, 0)
