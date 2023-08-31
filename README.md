@@ -10,6 +10,24 @@ Generate function comment anywhere.
   - win "ctrl + shift + /"
   - mac "cmd + shift + /"
 
+## Vim keyBindings Setting
+
+```json
+"vim.visualModeKeyBindingsNonRecursive": [
+  {
+    "before": ["<leader>", "c"],
+    "commands": ["function-comment.functionComment"]
+  }
+],
+"vim.normalModeKeyBindingsNonRecursive": [
+  {
+    "before": ["<leader>", "c"],
+    "commands": ["function-comment.functionComment"]
+  }
+]
+```
+✨ Happy hacking!
+
 ## Attention
 
 The arrow function moves the cursor to the line where `=>` is located.
